@@ -1,95 +1,126 @@
 package com.todo.list.rest.controllers;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.*;
 import com.todo.list.rest.models.entities.Task;
 import com.todo.list.rest.services.ITaskService;
-
-import lombok.extern.slf4j.Slf4j;
+import javax.validation.Valid;
+import java.util.Map;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:4200")
-@Slf4j
 @RequestMapping("/api/v1/tasks")
 public class TaskController {
-	 
-	private final int DEF_PAGE = 0;
-	private final int PAGE_SIZE = 5;
-	private final String SORTED_BY = "id";
-	private final int ORDER_BY_DESC = 0;
-	
-	@Autowired
-	private ITaskService taskService;
-	
-	@GetMapping
-	public Page<Task> showAll(
-			@RequestParam(name = "page", defaultValue = "0") Integer page, 
-			@RequestParam(name = "page_size", required = false, defaultValue = "5") Integer pageSize,
-			@RequestParam(name = "sorted_by", required = false, defaultValue = "id") String sortedBy,
-			@RequestParam(name= "is_order_desc", required = false, defaultValue = "0") Integer orderBy){
-		
-		Pageable pageable;
-		try {
-			int pageX = (page == null)? DEF_PAGE: page;
-			int pageSizeX = (pageSize != null)? pageSize : PAGE_SIZE;
-			String sortedByX = (sortedBy != null || sortedBy != "day" || sortedBy != "title" )? sortedBy: SORTED_BY;
-			int orderByX = (orderBy != null && (orderBy > -1 && orderBy < 2))? orderBy : ORDER_BY_DESC;
-		
-			if(orderByX == 1) {
-				pageable = PageRequest.of(pageX, pageSizeX, Sort.by(sortedByX).descending());
-			}else {
-				pageable = PageRequest.of(pageX, pageSizeX, Sort.by(sortedByX).ascending());
-			}
-			
-		} catch (Exception e) {
-			e.printStackTrace();
-			pageable = PageRequest.of(DEF_PAGE, PAGE_SIZE, Sort.by(SORTED_BY));
-		}
-		return taskService.findAll(pageable);
-	}
-	
-	@GetMapping("/{id}")
-	public Task showItem(@PathVariable(name = "id") Long id) {
-		return taskService.findOne(id);
-	}
-	
-	
-	@PostMapping
-	public void create(@RequestBody Task task) {
-		taskService.save(task);
-	}
-	
-	@PutMapping("/{id}")
-	public void update(@RequestBody Task task, @PathVariable(name="id") Long id) {
-		Task taskToUpdate = taskService.findOne(id);
-		if(taskToUpdate != null) {
-			taskToUpdate.setTitle(task.getTitle());
-			taskToUpdate.setDescription(task.getDescription());
-			taskToUpdate.setHour(task.getHour());
-			taskToUpdate.setDay(task.getDay());
-			taskToUpdate.setDone(task.isDone());
-			taskService.save(taskToUpdate);
-		}
-	}
-	
-	
-	@DeleteMapping("/{id}")
-	public void delete(@PathVariable(name = "id") Long id) {
-		Task taskToDelete = taskService.findOne(id);
-		taskService.delete(taskToDelete);
-	}
+
+    @Autowired
+    private ITaskService taskService;
+
+    @GetMapping
+    public ResponseEntity<Page<Task>> showAll(
+            @RequestParam(name = "page", defaultValue = "0") Integer page,
+            @RequestParam(name = "page_size", required = false, defaultValue = "5") Integer pageSize,
+            @RequestParam(name = "sorted_by", required = false, defaultValue = "id") String sortedBy,
+            @RequestParam(name = "order_desc", required = false, defaultValue = "0") Integer orderBy) {
+
+        Pageable pageable = null;
+        Page<Task> pageData = null;
+        int requestPageSize =  pageSize;
+        String requestSortedBy = sortedBy;
+        int requestOrderBy = orderBy;
+
+        try {
+            if (requestOrderBy == 1) {
+                pageable = PageRequest.of(page, requestPageSize, Sort.by(requestSortedBy).descending());
+            } else {
+                pageable = PageRequest.of(page, requestPageSize, Sort.by(requestSortedBy).ascending());
+            }
+            pageData = taskService.findAll(pageable);
+            if (page < pageData.getTotalPages()) {
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(pageData);
+               } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception err) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Task> showItem(@PathVariable(name = "id") Long id) {
+        try {
+            Task taskToShow = taskService.findOne(id);
+            if (taskToShow != null) {
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(taskToShow);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (DataAccessException err) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+
+    @PostMapping
+    public ResponseEntity<Task> create(@Valid @RequestBody Task task, BindingResult validationResult) {
+        if (validationResult.hasErrors()) {
+            return ResponseEntity.badRequest().build();
+        } else {
+            try {
+                Task newTask = taskService.save(task);
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(newTask);
+            } catch (DataAccessException err) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            }
+        }
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Task> update(@Valid @RequestBody Task task, BindingResult taskInfo, @PathVariable(name = "id") Long id) {
+        try {
+            Task taskToUpdate = taskService.findOne(id);
+            if (taskToUpdate != null) {
+                if (!taskInfo.hasErrors()) {
+                    taskToUpdate.setTitle(task.getTitle());
+                    taskToUpdate.setDescription(task.getDescription());
+                    taskToUpdate.setTimeTodo(task.getTimeTodo());
+                    taskToUpdate.setDateTodo(task.getDateTodo());
+                    taskToUpdate.setDone(task.isDone());
+                    taskService.save(taskToUpdate);
+                    return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(taskToUpdate);
+                } else {
+                    return ResponseEntity.badRequest().build();
+                }
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (DataAccessException err) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Task> delete(@PathVariable(name = "id") Long id) {
+        try {
+            Task taskToDelete = taskService.findOne(id);
+            if (taskToDelete != null) {
+                taskService.delete(taskToDelete);
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(taskToDelete);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (DataAccessException err) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
 }

@@ -11,6 +11,10 @@ import javax.persistence.Id;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
+import javax.validation.constraints.Future;
+import javax.validation.constraints.NotEmpty;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Pattern;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
@@ -27,25 +31,31 @@ public class Task implements Serializable{
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
-	
+
+	@NotEmpty(message = "title is required")
 	@Column(name = "title", nullable = false, length = 50)
 	private String title;
-	
+
+	@NotEmpty(message = "description is required")
 	@Column(name="description", nullable = false, length = 350)
 	private String description;
-	
+
+
 	@Column(name = "done", columnDefinition = "tinyint(1) default 0")
 	private boolean done;
-	
-	@Temporal(TemporalType.DATE)
+
+
+    @NotNull
+    @Temporal(TemporalType.DATE)
 	@JsonFormat(pattern = "yyyy-MM-dd")
 	@DateTimeFormat(iso = ISO.DATE)
-	private Date day;
-	
-	@Temporal(TemporalType.TIME)
+	private Date dateTodo;
+
+    @NotNull
+    @Temporal(TemporalType.TIME)
 	@JsonFormat(pattern = "hh:mm:ss")
 	@DateTimeFormat(iso = ISO.TIME)
-	private Date hour;
+	private Date timeTodo;
 
 	public Long getId() {
 		return id;
@@ -79,20 +89,20 @@ public class Task implements Serializable{
 		this.done = done;
 	}
 
-	public Date getDay() {
-		return day;
+	public Date getDateTodo() {
+		return dateTodo;
 	}
 
-	public void setDay(Date day) {
-		this.day = day;
+	public void setDateTodo(Date dateTodo) {
+		this.dateTodo = dateTodo;
 	}
 
-	public Date getHour() {
-		return hour;
+	public Date getTimeTodo() {
+		return timeTodo;
 	}
 
-	public void setHour(Date hour) {
-		this.hour = hour;
+	public void setTimeTodo(Date timeTodo) {
+		this.timeTodo = timeTodo;
 	}
 	
 	

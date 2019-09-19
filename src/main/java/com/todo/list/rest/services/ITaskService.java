@@ -11,7 +11,7 @@ public interface ITaskService {
 	
 	public Task findOne(Long id);
 	
-	public void save(Task task);
+	public Task save(Task task);
 	
 	public void delete(Task task);
 }
