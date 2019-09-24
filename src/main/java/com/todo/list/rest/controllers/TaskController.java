@@ -13,8 +13,12 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import com.todo.list.rest.models.entities.Task;
 import com.todo.list.rest.services.ITaskService;
+
 import javax.validation.Valid;
+import java.net.URI;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:4200")
@@ -25,11 +29,13 @@ public class TaskController {
     private ITaskService taskService;
 
     @GetMapping
-    public ResponseEntity<Page<Task>> showAll(
+    public ResponseEntity<Map<String, Object>> showAll(
             @RequestParam(name = "page", defaultValue = "0") Integer page,
             @RequestParam(name = "page_size", required = false, defaultValue = "5") Integer pageSize,
             @RequestParam(name = "sorted_by", required = false, defaultValue = "id") String sortedBy,
             @RequestParam(name = "order_desc", required = false, defaultValue = "0") Integer orderBy) {
+
+        Map<String, Object> responseBody = new HashMap<>();
 
         Pageable pageable = null;
         Page<Task> pageData = null;
@@ -45,46 +51,72 @@ public class TaskController {
             }
             pageData = taskService.findAll(pageable);
             if (page < pageData.getTotalPages()) {
-                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(pageData);
+                responseBody.put("page", pageData);
+                responseBody.put("status", HttpStatus.OK.value());
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(responseBody);
                } else {
-                return ResponseEntity.notFound().build();
+                responseBody.put("errors", "Page not found");
+                responseBody.put("status", HttpStatus.NOT_FOUND.value());
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
             }
         } catch (Exception err) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            responseBody.put("errors", "Internal Server Error");
+            responseBody.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseBody);
         }
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Task> showItem(@PathVariable(name = "id") Long id) {
+    public ResponseEntity<Map<String, Object>> showItem(@PathVariable(name = "id") Long id) {
+        Map<String, Object> responseBody = new HashMap<>();
         try {
             Task taskToShow = taskService.findOne(id);
             if (taskToShow != null) {
-                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(taskToShow);
+                responseBody.put("task", taskToShow);
+                responseBody.put("status", HttpStatus.OK.value());
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(responseBody);
             } else {
-                return ResponseEntity.notFound().build();
+                responseBody.put("errors",String.format("Task with id = %s not found", id));
+                responseBody.put("status", HttpStatus.NOT_FOUND.value());
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
             }
         } catch (DataAccessException err) {
-            return ResponseEntity.badRequest().build();
+            responseBody.put("errors","Internal Server Error");
+            responseBody.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseBody);
         }
     }
 
 
     @PostMapping
-    public ResponseEntity<Task> create(@Valid @RequestBody Task task, BindingResult validationResult) {
+    public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody Task task, BindingResult validationResult) {
+        Map<String, Object> responseBody = new HashMap<>();
         if (validationResult.hasErrors()) {
-            return ResponseEntity.badRequest().build();
+            responseBody.put("errors", validationResult.getFieldErrors().stream()
+                    .map(e -> String.format("%s: %s\n", e.getField(), e.getDefaultMessage()))
+                    .reduce((last, current)-> last+current));
+            responseBody.put("status", HttpStatus.BAD_REQUEST.value());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(responseBody);
         } else {
             try {
                 Task newTask = taskService.save(task);
-                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(newTask);
+
+                responseBody.put("task", newTask);
+                responseBody.put("status", HttpStatus.CREATED.value());
+                return ResponseEntity.created(URI.create(String.format("http://localhost/api/v1/tasks/%s", newTask.getId()))).contentType(MediaType.APPLICATION_JSON_UTF8).
+                        body(responseBody);
+
             } catch (DataAccessException err) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+                responseBody.put("errors", "Internal server error");
+                responseBody.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseBody);
             }
         }
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Task> update(@Valid @RequestBody Task task, BindingResult taskInfo, @PathVariable(name = "id") Long id) {
+    public ResponseEntity<Map<String, Object>> update(@Valid @RequestBody Task task, BindingResult taskInfo, @PathVariable(name = "id") Long id) {
+        Map<String, Object> responseBody = new HashMap<>();
         try {
             Task taskToUpdate = taskService.findOne(id);
             if (taskToUpdate != null) {
@@ -95,32 +127,55 @@ public class TaskController {
                     taskToUpdate.setDateTodo(task.getDateTodo());
                     taskToUpdate.setDone(task.isDone());
                     taskService.save(taskToUpdate);
-                    return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(taskToUpdate);
+
+                    responseBody.put("task", taskToUpdate);
+                    responseBody.put("status", HttpStatus.OK.value());
+                    return ResponseEntity.created(URI.create(String.format("http://localhost/api/v1/tasks/%s", id))).contentType(MediaType.APPLICATION_JSON_UTF8).body(responseBody);
+
                 } else {
-                    return ResponseEntity.badRequest().build();
+                    Optional<String> errors = taskInfo.getFieldErrors().stream()
+                            .map(e -> String.format("%s: %s\n", e.getField(), e.getDefaultMessage()))
+                            .reduce((last, current)-> last+current);
+
+                    responseBody.put("errors",errors);
+                    responseBody.put("status", HttpStatus.BAD_REQUEST.value());
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(responseBody);
                 }
             } else {
-                return ResponseEntity.notFound().build();
+                responseBody.put("errors", String.format("Task with id = %s not found", id));
+                responseBody.put("status", HttpStatus.NOT_FOUND.value());
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
             }
         } catch (DataAccessException err) {
+            responseBody.put("Errors", "Internal server error");
+            responseBody.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Task> delete(@PathVariable(name = "id") Long id) {
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable(name = "id") Long id) {
+        Map<String, Object> responseBody = new HashMap<>();
         try {
             Task taskToDelete = taskService.findOne(id);
             if (taskToDelete != null) {
                 taskService.delete(taskToDelete);
-                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(taskToDelete);
+                responseBody.put("task", taskToDelete);
+                responseBody.put("status", HttpStatus.OK.value());
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(responseBody);
             } else {
-                return ResponseEntity.notFound().build();
+                responseBody.put("errors", String.format("Task with id = %s not found", id));
+                responseBody.put("status", HttpStatus.NOT_FOUND.value());
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
             }
         } catch (DataAccessException err) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            responseBody.put("errors", "Internal server error");
+            responseBody.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseBody);
         }
     }
+
+
 
 }
