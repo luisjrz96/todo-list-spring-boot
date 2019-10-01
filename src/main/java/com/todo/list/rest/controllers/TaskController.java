@@ -90,20 +90,20 @@ public class TaskController {
 	@PostMapping
 	public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody Task task, BindingResult validationResult) {
 		Map<String, Object> responseBody = new HashMap<>();
-			try {
-				Task newTask = taskService.save(task);
-				responseBody.put("task", newTask);
-				responseBody.put("status", HttpStatus.CREATED.value());
-				return ResponseEntity
-						.created(URI.create(String.format("http://localhost/api/v1/tasks/%s", newTask.getId())))
-						.contentType(MediaType.APPLICATION_JSON_UTF8).body(responseBody);
+		try {
+			Task newTask = taskService.save(task);
+			responseBody.put("task", newTask);
+			responseBody.put("status", HttpStatus.CREATED.value());
+			return ResponseEntity
+					.created(URI.create(String.format("http://localhost/api/v1/tasks/%s", newTask.getId())))
+					.contentType(MediaType.APPLICATION_JSON_UTF8).body(responseBody);
 
-			} catch (DataAccessException err) {
-				responseBody.put("errors", "Internal server error");
-				responseBody.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseBody);
-			}
-		
+		} catch (DataAccessException err) {
+			responseBody.put("errors", "Internal server error");
+			responseBody.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(responseBody);
+		}
+
 	}
 
 	@PutMapping("/{id}")
@@ -113,7 +113,6 @@ public class TaskController {
 		try {
 			Task taskToUpdate = taskService.findOne(id);
 			if (taskToUpdate != null) {
-				if (!taskInfo.hasErrors()) {
 					taskToUpdate.setTitle(task.getTitle());
 					taskToUpdate.setDescription(task.getDescription());
 					taskToUpdate.setTimeTodo(task.getTimeTodo());
@@ -125,20 +124,9 @@ public class TaskController {
 					responseBody.put("status", HttpStatus.OK.value());
 					return ResponseEntity.created(URI.create(String.format("http://localhost/api/v1/tasks/%s", id)))
 							.contentType(MediaType.APPLICATION_JSON_UTF8).body(responseBody);
-
-				} else {
-					Optional<String> errors = taskInfo.getFieldErrors().stream()
-							.map(e -> String.format("%s: %s\n", e.getField(), e.getDefaultMessage()))
-							.reduce((last, current) -> last + current);
-
-					responseBody.put("errors", errors);
-					responseBody.put("status", HttpStatus.BAD_REQUEST.value());
-					return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(responseBody);
-				}
+				
 			} else {
-				responseBody.put("errors", String.format("Task with id = %s not found", id));
-				responseBody.put("status", HttpStatus.NOT_FOUND.value());
-				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
+				throw new TaskNotFoundException(id); 
 			}
 		} catch (DataAccessException err) {
 			responseBody.put("Errors", "Internal server error");
@@ -158,9 +146,7 @@ public class TaskController {
 				responseBody.put("status", HttpStatus.OK.value());
 				return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON_UTF8).body(responseBody);
 			} else {
-				responseBody.put("errors", String.format("Task with id = %s not found", id));
-				responseBody.put("status", HttpStatus.NOT_FOUND.value());
-				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
+				throw new TaskNotFoundException(id);
 			}
 		} catch (DataAccessException err) {
 			responseBody.put("errors", "Internal server error");
